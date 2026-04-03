@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"rest-api/dbconfig"
 	"rest-api/internal/handlers"
 	"rest-api/internal/routes"
 	"rest-api/serverconfig"
@@ -14,6 +15,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// db connection
+
+	db := dbconfig.ConnectDB(config.DatabaseURL)
+	defer db.Close()
+
 	// create a new handler
 
 	handler := handlers.NewHandlers()
