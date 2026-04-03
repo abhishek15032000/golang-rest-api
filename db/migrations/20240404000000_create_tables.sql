@@ -1,3 +1,4 @@
+-- migrate:up
 CREATE TABLE IF NOT EXISTS users (
    id SERIAL PRIMARY KEY,
    username VARCHAR(255) NOT NULL,
@@ -14,5 +15,11 @@ CREATE TABLE IF NOT EXISTS blogs (
     user_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_user FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
 );
+
+-- migrate:down
+DROP TABLE IF EXISTS blogs;
+DROP TABLE IF EXISTS users;
