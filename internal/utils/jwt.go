@@ -9,47 +9,40 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-	UserID   int    `json:"user_id"`
-	Username string `json:"username"`
-	jwt.RegisteredClaims
-}
-
 func GenerateJWT(userID int, username string) (string, error) {
 	key, exist := os.LookupEnv("JWT_SECRET")
 	if !exist {
 		log.Fatalf("JWT_SECRET is not defined")
 		return "", fmt.Errorf("JWT_SECRET is not defined")
 	}
-	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
-			Issuer:    "Belwa Madho",
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
+	claims := jwt.MapClaims{
+		"user_id":  userID,
+		"username": username,
+		"exp":      time.Now().Add(15 * time.Minute).Unix(),
+		"iss":      "Belwa Madho",
+		"iat":      time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(key))
 }
 
-func ParseJWT(tokenString string) (*Claims, error) {
+func ParseJWT(tokenString string) (jwt.MapClaims, error) {
 	key, exist := os.LookupEnv("JWT_SECRET")
 	if !exist {
 		log.Fatalf("JWT_SECRET PROBLEM")
 		return nil, fmt.Errorf("JWT_SECRET PROBLEM")
 	}
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(key), nil
 	})
 	if err != nil {
+		log.Println("JWT parse error:", err) // log.Println, NOT log.Fatal — don't crash the server
 		return nil, err
 	}
-	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		return claims, nil
 	}
 	return nil, fmt.Errorf("invalid token")

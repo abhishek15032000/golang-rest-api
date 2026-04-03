@@ -2,7 +2,6 @@ package dbconfig
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 
 	_ "github.com/lib/pq"
@@ -16,6 +15,6 @@ func ConnectDB(databaseURL string) *sql.DB {
 	if err = db.Ping(); err != nil {
 		log.Fatalf("Failed to ping db %v", err)
 	}
-	fmt.Println("Connected to db")
+	log.Println("Connected to db")
 	return db
 }

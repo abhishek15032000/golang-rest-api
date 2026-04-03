@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"rest-api/internal/dtos"
+	"rest-api/internal/middleware"
 	"rest-api/internal/store"
 	"rest-api/internal/utils"
 	"rest-api/internal/validation"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // login a user.
@@ -123,5 +126,23 @@ func (h *Handler) CreateUser() http.HandlerFunc {
 		}
 
 		utils.RespondWithSuccess(w, http.StatusCreated, "User created successfully", nil)
+	}
+}
+
+func (h *Handler) GetProfile() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
+		if !ok {
+			utils.RespondWithError(w, http.StatusBadRequest, "please login to continue")
+			return
+		}
+		userID := int32(claims["user_id"].(float64))
+		user, err := h.Queries.GetUser(ctx, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		utils.RespondWithSuccess(w, http.StatusOK, "User profile fetched successfully", user)
 	}
 }
