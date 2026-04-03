@@ -2,3 +2,6 @@
 .env
 #binary files, exe file
 *.exe
+
+#db files
+/db/schema.sql
