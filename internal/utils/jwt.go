@@ -33,3 +33,24 @@ func GenerateJWT(userID int, username string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(key))
 }
+
+func ParseJWT(tokenString string) (*Claims, error) {
+	key, exist := os.LookupEnv("JWT_SECRET")
+	if !exist {
+		log.Fatalf("JWT_SECRET PROBLEM")
+		return nil, fmt.Errorf("JWT_SECRET PROBLEM")
+	}
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(key), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		return claims, nil
+	}
+	return nil, fmt.Errorf("invalid token")
+}
