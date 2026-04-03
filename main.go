@@ -7,6 +7,7 @@ import (
 	"rest-api/dbconfig"
 	"rest-api/internal/handlers"
 	"rest-api/internal/routes"
+	"rest-api/internal/store"
 	"rest-api/serverconfig"
 )
 
@@ -21,9 +22,12 @@ func main() {
 	db := dbconfig.ConnectDB(config.DatabaseURL)
 	defer db.Close()
 
+	// retuns pointers to store.Queries
+	queries := store.New(db)
+
 	// create a new handler
 
-	handler := handlers.NewHandlers()
+	handler := handlers.NewHandlers(db, queries)
 
 	// set up the http server
 	mux := http.NewServeMux()
