@@ -11,6 +11,7 @@ import (
 	"rest-api/internal/store"
 	"rest-api/internal/utils"
 	"rest-api/internal/validation"
+	"strconv"
 	"strings"
 	"time"
 
@@ -265,4 +266,21 @@ func extractTokenFromHander(r *http.Request) string {
 		return ""
 	}
 	return parts[1]
+}
+
+func (h *Handler) ListAllUsers() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		users, err := h.Queries.ListUsers(ctx, store.ListUsersParams{
+			Limit:  int32(limit),
+			Offset: int32(offset),
+		})
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to list users")
+			return
+		}
+		utils.RespondWithSuccess(w, http.StatusOK, "Users listed successfully", users)
+	}
 }
