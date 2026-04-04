@@ -8,7 +8,10 @@ import (
 	"rest-api/internal/handlers"
 	"rest-api/internal/routes"
 	"rest-api/internal/store"
+	"rest-api/redisconfig"
 	"rest-api/serverconfig"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -22,12 +25,18 @@ func main() {
 	db := dbconfig.ConnectDB(config.DatabaseURL)
 	defer db.Close()
 
+	// redis instance
+
+	redisinstance := redisconfig.ConnectRedis()
+	defer func(rdb *redis.Client) {
+		_ = rdb.Close()
+	}(redisinstance)
 	// retuns pointers to store.Queries
 	queries := store.New(db)
 
 	// create a new handler
 
-	handler := handlers.NewHandlers(db, queries)
+	handler := handlers.NewHandlers(db, queries, redisinstance)
 
 	// set up the http server
 	mux := http.NewServeMux()

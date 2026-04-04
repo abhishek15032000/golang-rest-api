@@ -3,12 +3,14 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"rest-api/internal/dtos"
 	"rest-api/internal/middleware"
 	"rest-api/internal/store"
 	"rest-api/internal/utils"
 	"rest-api/internal/validation"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -138,11 +140,28 @@ func (h *Handler) GetProfile() http.HandlerFunc {
 			return
 		}
 		userID := int32(claims["user_id"].(float64))
+		// check the redis first
+		cacheKey := fmt.Sprintf("user:%d", userID)
+		if cached, err := h.Redis.Get(ctx, cacheKey).Result(); err == nil {
+			var user store.User
+			if err := json.Unmarshal([]byte(cached), &user); err != nil {
+				utils.RespondWithError(w, http.StatusInternalServerError, "Failed to unmarshal cached data")
+				return
+			}
+			utils.RespondWithSuccess(w, http.StatusOK, "User profile fetched successfully (success from cache/redis)", user)
+			return
+		}
+		// fall back to db;
 		user, err := h.Queries.GetUser(ctx, userID)
 		if err != nil {
 			utils.RespondWithError(w, http.StatusNotFound, "user not found")
 			return
 		}
+		// set in redis.
+		userJSON, _ := json.Marshal(user) // converting into json string
+		// marshal means - converting the struct into json string
+		// unmarshal means - converting the json to struct
+		h.Redis.Set(ctx, cacheKey, userJSON, 5*time.Minute)
 		utils.RespondWithSuccess(w, http.StatusOK, "User profile fetched successfully", user)
 	}
 }
