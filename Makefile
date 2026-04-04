@@ -44,6 +44,14 @@ migrate-down:
 migrate-status:
 	@dbmate --env-file .env -d ./db/migrations status
 
+migrate-reset:
+	@echo "Rolling back ALL migrations"
+	@while dbmate --env-file .env -d ./db/migrations status 2>&1 | grep -q "\[X\]"; do \
+		dbmate --env-file .env -d ./db/migrations down; \
+	done
+	@echo "All migrations rolled back"
+
+
 help:
 	@echo "Available commands"
 	@echo " make run           - Run the server"

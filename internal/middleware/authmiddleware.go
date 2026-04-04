@@ -14,7 +14,7 @@ type contextKey string
 
 const UserClaimsKey contextKey = "claims"
 
-func AuthMiddleware(next http.Handler) http.Handler {
+func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// retrieve the Authorization Header from request
 		authHeader := r.Header.Get("Authorization")

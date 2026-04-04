@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"rest-api/internal/dtos"
 	"rest-api/internal/middleware"
 	"rest-api/internal/store"
@@ -13,8 +14,58 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// upload User profile
+
+func (h *Handler) UploadProfileImage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
+		if !ok {
+			utils.RespondWithError(w, http.StatusBadRequest, "please login to continue")
+			return
+		}
+		userID := int32(claims["user_id"].(float64))
+		// upload from the form data
+		err := r.ParseMultipartForm(10 << 20) // 10MB
+		if err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Failed to parse form")
+			return
+		}
+		// file type : image/file
+		file, fileHeader, err := r.FormFile("profile_image")
+		if err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "Failed to get file")
+			return
+		}
+		defer file.Close()
+		// check file type
+		cld, err := cloudinary.NewFromParams(os.Getenv("CLOUDINARY_CLOUD_NAME"), os.Getenv("CLOUDINARY_API_KEY"), os.Getenv("CLOUDINARY_API_SECRET"))
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to initialize Cloudinary")
+			return
+		}
+		// save file
+		uploadedResult, err := cld.Upload.Upload(r.Context(), file, uploader.UploadParams{
+			PublicID: fileHeader.Filename,
+			Folder:   "profile_image",
+		})
+		// fmt.Println(uploadedResult)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to upload file")
+			return
+		}
+		// commit to the db
+		h.Queries.CreateUserProfile(r.Context(), store.CreateUserProfileParams{
+			UserID:       int32(userID),
+			ProfileImage: sql.NullString{String: uploadedResult.SecureURL, Valid: uploadedResult.SecureURL != ""},
+		})
+		utils.RespondWithSuccess(w, http.StatusOK, "Profile image uploaded successfully", uploadedResult.SecureURL)
+	}
+}
 
 // login a user.
 

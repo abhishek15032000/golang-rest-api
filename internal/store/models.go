@@ -25,3 +25,11 @@ type User struct {
 	CreatedAt sql.NullTime `json:"created_at"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
+
+type UserProfile struct {
+	ID           int32          `json:"id"`
+	UserID       int32          `json:"user_id"`
+	ProfileImage sql.NullString `json:"profile_image"`
+	CreatedAt    sql.NullTime   `json:"created_at"`
+	UpdatedAt    sql.NullTime   `json:"updated_at"`
+}

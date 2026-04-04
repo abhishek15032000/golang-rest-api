@@ -69,6 +69,30 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	return i, err
 }
 
+const createUserProfile = `-- name: CreateUserProfile :one
+INSERT INTO USER_PROFILES (USER_ID, PROFILE_IMAGE)
+VALUES ($1, $2)
+RETURNING ID, USER_ID, PROFILE_IMAGE
+`
+
+type CreateUserProfileParams struct {
+	UserID       int32          `json:"user_id"`
+	ProfileImage sql.NullString `json:"profile_image"`
+}
+
+type CreateUserProfileRow struct {
+	ID           int32          `json:"id"`
+	UserID       int32          `json:"user_id"`
+	ProfileImage sql.NullString `json:"profile_image"`
+}
+
+func (q *Queries) CreateUserProfile(ctx context.Context, arg CreateUserProfileParams) (CreateUserProfileRow, error) {
+	row := q.queryRow(ctx, q.createUserProfileStmt, createUserProfile, arg.UserID, arg.ProfileImage)
+	var i CreateUserProfileRow
+	err := row.Scan(&i.ID, &i.UserID, &i.ProfileImage)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT ID, USERNAME, EMAIL, CREATED_AT, UPDATED_AT FROM USERS WHERE ID = $1
 `
@@ -124,6 +148,24 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Username,
 		&i.Email,
 		&i.Password,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserProfileByUserId = `-- name: GetUserProfileByUserId :one
+SELECT ID, USER_ID, PROFILE_IMAGE, CREATED_AT, UPDATED_AT
+FROM USER_PROFILES WHERE USER_ID = $1
+`
+
+func (q *Queries) GetUserProfileByUserId(ctx context.Context, userID int32) (UserProfile, error) {
+	row := q.queryRow(ctx, q.getUserProfileByUserIdStmt, getUserProfileByUserId, userID)
+	var i UserProfile
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProfileImage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

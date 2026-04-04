@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS blogs (
         ON DELETE CASCADE
 );
 
+
 -- migrate:down
 DROP TABLE IF EXISTS blogs;
 DROP TABLE IF EXISTS users;

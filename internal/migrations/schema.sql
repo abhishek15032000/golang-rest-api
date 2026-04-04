@@ -16,3 +16,12 @@ CREATE TABLE IF NOT EXISTS blogs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+create table if not exists user_profiles(
+    id serial primary key,
+    user_id int not null,
+    profile_image varchar(255),
+    created_at timestamp default current_timestamp,
+    updated_at timestamp default current_timestamp,
+    foreign key (user_id) references users(id) on delete cascade
+);
