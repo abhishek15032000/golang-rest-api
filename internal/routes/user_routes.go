@@ -12,5 +12,6 @@ func SetupUserRoutes(mux *http.ServeMux, h *handlers.Handler) {
 	userMux.HandleFunc("POST /login", h.LoginUser())
 	// it is going to middleware which is handleFunc , if it passes there then the middleware will itself has the handlerfunc we passed, it will move to that.
 	userMux.Handle("GET /profile", middleware.AuthMiddleware(http.HandlerFunc(h.GetProfile())))
+	userMux.Handle("POST /session/logout", middleware.AuthMiddleware(http.HandlerFunc(h.Logout())))
 	mux.Handle("/users/", http.StripPrefix("/users", userMux))
 }

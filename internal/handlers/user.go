@@ -10,6 +10,7 @@ import (
 	"rest-api/internal/store"
 	"rest-api/internal/utils"
 	"rest-api/internal/validation"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -164,4 +165,53 @@ func (h *Handler) GetProfile() http.HandlerFunc {
 		h.Redis.Set(ctx, cacheKey, userJSON, 5*time.Minute)
 		utils.RespondWithSuccess(w, http.StatusOK, "User profile fetched successfully", user)
 	}
+}
+
+func (h *Handler) Logout() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 1. extract jwt claims from the request context
+		ctx := r.Context()
+		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
+		if !ok {
+			utils.RespondWithError(w, http.StatusBadRequest, "please login to continue")
+			return
+		}
+		// extract token from auth header
+		tokenString := extractTokenFromHander(r)
+		if tokenString == "" {
+			utils.RespondWithError(w, http.StatusUnauthorized, "token not found")
+			return
+		}
+		// 2. convert expiresAt to time.Time
+		expirationTime := time.Unix(int64(claims["exp"].(float64)), 0)
+		currentTIme := time.Now()
+		ttl := expirationTime.Sub(currentTIme)
+		if ttl <= 0 {
+			ttl = 5 * time.Minute // fallback ttl
+		}
+		// 3. add token to blacklist in redis
+		// it is setting tokenstring:blacklisted like this in redis
+		if err := h.Redis.Set(ctx, tokenString, "blacklisted", ttl).Err(); err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to blacklist token")
+			return
+		}
+		// clean user cache in redis:-
+		cacheKey := fmt.Sprintf("user:%d", int32(claims["user_id"].(float64)))
+		if err := h.Redis.Del(ctx, cacheKey).Err(); err != nil {
+			fmt.Printf("Error Cleaning user cache for %s in redis: %v\n", cacheKey, err)
+		}
+		utils.RespondWithSuccess(w, http.StatusOK, "User logged out successfully", nil)
+	}
+}
+
+func extractTokenFromHander(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return ""
+	}
+	return parts[1]
 }

@@ -4,7 +4,10 @@ import (
 	"context"
 	"net/http"
 	"rest-api/internal/utils"
+	"rest-api/redisconfig"
 	"strings"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type contextKey string
@@ -26,6 +29,15 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return // <-- was missing! Without this, parts[1] panics on bad format
 		}
 		token := parts[1]
+		// check for blacklisted token before moving to the next function
+		blacklisted, err := redisconfig.RedisClient.Get(r.Context(), token).Result()
+		if err == nil && blacklisted == "blacklisted" {
+			utils.RespondWithError(w, http.StatusUnauthorized, "Token revoked")
+			return
+		} else if err != nil && err != redis.Nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to check token status")
+			return
+		}
 		claims, err := utils.ParseJWT(token)
 		if err != nil {
 			utils.RespondWithError(w, http.StatusUnauthorized, "Invalid token")
