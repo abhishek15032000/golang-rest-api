@@ -10,3 +10,7 @@ type LoginRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=30"`
 	Password string `json:"password" validate:"required,min=8"`
 }
+
+type VerifyOTPRequest struct {
+	Otpkey string `json:"otpkey" validate:"required,min=1"`
+}

@@ -14,6 +14,14 @@ func HashPassword(password string) (string, error) {
 	}
 	return string(hashedPassword), nil
 }
+func HashOTP(otp string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
+	if err != nil {
+		log.Println("Error hashing otp")
+		return "", err
+	}
+	return string(hash), nil
+}
 
 func ComparePassword(password string, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))

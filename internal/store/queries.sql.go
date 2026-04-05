@@ -36,10 +36,42 @@ func (q *Queries) CreateBlog(ctx context.Context, arg CreateBlogParams) (Blog, e
 	return i, err
 }
 
+const createOTP = `-- name: CreateOTP :one
+INSERT INTO OTP_VERIFICATION (OTP_KEY, USER_ID)
+VALUES ($1, $2)
+RETURNING ID, OTP_KEY, ISSUED_AT, EXPIRES_AT, USER_ID
+`
+
+type CreateOTPParams struct {
+	OtpKey string `json:"otp_key"`
+	UserID int32  `json:"user_id"`
+}
+
+type CreateOTPRow struct {
+	ID        int32        `json:"id"`
+	OtpKey    string       `json:"otp_key"`
+	IssuedAt  sql.NullTime `json:"issued_at"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	UserID    int32        `json:"user_id"`
+}
+
+func (q *Queries) CreateOTP(ctx context.Context, arg CreateOTPParams) (CreateOTPRow, error) {
+	row := q.queryRow(ctx, q.createOTPStmt, createOTP, arg.OtpKey, arg.UserID)
+	var i CreateOTPRow
+	err := row.Scan(
+		&i.ID,
+		&i.OtpKey,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.UserID,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO USERS(USERNAME, EMAIL, PASSWORD)
 VALUES ($1, $2, $3)
-RETURNING ID, USERNAME, EMAIL, CREATED_AT, UPDATED_AT
+RETURNING ID, USERNAME, EMAIL, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT
 `
 
 type CreateUserParams struct {
@@ -49,11 +81,12 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	ID        int32        `json:"id"`
-	Username  string       `json:"username"`
-	Email     string       `json:"email"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	ID            int32        `json:"id"`
+	Username      string       `json:"username"`
+	Email         string       `json:"email"`
+	EmailVerified sql.NullBool `json:"email_verified"`
+	CreatedAt     sql.NullTime `json:"created_at"`
+	UpdatedAt     sql.NullTime `json:"updated_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -63,6 +96,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.ID,
 		&i.Username,
 		&i.Email,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -94,15 +128,16 @@ func (q *Queries) CreateUserProfile(ctx context.Context, arg CreateUserProfilePa
 }
 
 const getUser = `-- name: GetUser :one
-SELECT ID, USERNAME, EMAIL, CREATED_AT, UPDATED_AT FROM USERS WHERE ID = $1
+SELECT ID, USERNAME, EMAIL, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT FROM USERS WHERE ID = $1
 `
 
 type GetUserRow struct {
-	ID        int32        `json:"id"`
-	Username  string       `json:"username"`
-	Email     string       `json:"email"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	ID            int32        `json:"id"`
+	Username      string       `json:"username"`
+	Email         string       `json:"email"`
+	EmailVerified sql.NullBool `json:"email_verified"`
+	CreatedAt     sql.NullTime `json:"created_at"`
+	UpdatedAt     sql.NullTime `json:"updated_at"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, id int32) (GetUserRow, error) {
@@ -112,6 +147,7 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (GetUserRow, error) {
 		&i.ID,
 		&i.Username,
 		&i.Email,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -119,7 +155,7 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (GetUserRow, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT ID, USERNAME, EMAIL, PASSWORD, CREATED_AT, UPDATED_AT FROM USERS WHERE EMAIL = $1
+SELECT ID, USERNAME, EMAIL, PASSWORD, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT FROM USERS WHERE EMAIL = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -130,6 +166,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Username,
 		&i.Email,
 		&i.Password,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -137,7 +174,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT ID, USERNAME, EMAIL, PASSWORD, CREATED_AT, UPDATED_AT FROM USERS WHERE USERNAME = $1
+SELECT ID, USERNAME, EMAIL, PASSWORD, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT FROM USERS WHERE USERNAME = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -148,6 +185,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Username,
 		&i.Email,
 		&i.Password,
+		&i.EmailVerified,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -168,6 +206,24 @@ func (q *Queries) GetUserProfileByUserId(ctx context.Context, userID int32) (Use
 		&i.ProfileImage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getValidOtpForUser = `-- name: GetValidOtpForUser :one
+SELECT id, otp_key, user_id, issued_at, expires_at, is_used FROM otp_verification WHERE user_id = $1 AND is_used = false AND expires_at > now() ORDER BY issued_at DESC LIMIT 1 FOR UPDATE
+`
+
+func (q *Queries) GetValidOtpForUser(ctx context.Context, userID int32) (OtpVerification, error) {
+	row := q.queryRow(ctx, q.getValidOtpForUserStmt, getValidOtpForUser, userID)
+	var i OtpVerification
+	err := row.Scan(
+		&i.ID,
+		&i.OtpKey,
+		&i.UserID,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.IsUsed,
 	)
 	return i, err
 }
@@ -207,7 +263,7 @@ func (q *Queries) ListBlogs(ctx context.Context) ([]Blog, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT ID, USERNAME, EMAIL, CREATED_AT, UPDATED_AT FROM USERS ORDER BY ID LIMIT $1 OFFSET $2
+SELECT ID, USERNAME, EMAIL, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT FROM USERS ORDER BY ID LIMIT $1 OFFSET $2
 `
 
 type ListUsersParams struct {
@@ -216,11 +272,12 @@ type ListUsersParams struct {
 }
 
 type ListUsersRow struct {
-	ID        int32        `json:"id"`
-	Username  string       `json:"username"`
-	Email     string       `json:"email"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	ID            int32        `json:"id"`
+	Username      string       `json:"username"`
+	Email         string       `json:"email"`
+	EmailVerified sql.NullBool `json:"email_verified"`
+	CreatedAt     sql.NullTime `json:"created_at"`
+	UpdatedAt     sql.NullTime `json:"updated_at"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
@@ -236,6 +293,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 			&i.ID,
 			&i.Username,
 			&i.Email,
+			&i.EmailVerified,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -250,4 +308,66 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 		return nil, err
 	}
 	return items, nil
+}
+
+const markOtpUsed = `-- name: MarkOtpUsed :one
+UPDATE otp_verification
+SET is_used = true
+WHERE id = $1
+AND is_used = false
+AND expires_at > now()
+RETURNING id, otp_key, issued_at, expires_at, user_id
+`
+
+type MarkOtpUsedRow struct {
+	ID        int32        `json:"id"`
+	OtpKey    string       `json:"otp_key"`
+	IssuedAt  sql.NullTime `json:"issued_at"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	UserID    int32        `json:"user_id"`
+}
+
+func (q *Queries) MarkOtpUsed(ctx context.Context, id int32) (MarkOtpUsedRow, error) {
+	row := q.queryRow(ctx, q.markOtpUsedStmt, markOtpUsed, id)
+	var i MarkOtpUsedRow
+	err := row.Scan(
+		&i.ID,
+		&i.OtpKey,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.UserID,
+	)
+	return i, err
+}
+
+const markUserEmailVerified = `-- name: MarkUserEmailVerified :one
+UPDATE users
+SET email_verified = true,
+    updated_at = now()
+WHERE id = $1
+AND email_verified = false
+RETURNING id, username, email, email_verified, created_at, updated_at
+`
+
+type MarkUserEmailVerifiedRow struct {
+	ID            int32        `json:"id"`
+	Username      string       `json:"username"`
+	Email         string       `json:"email"`
+	EmailVerified sql.NullBool `json:"email_verified"`
+	CreatedAt     sql.NullTime `json:"created_at"`
+	UpdatedAt     sql.NullTime `json:"updated_at"`
+}
+
+func (q *Queries) MarkUserEmailVerified(ctx context.Context, id int32) (MarkUserEmailVerifiedRow, error) {
+	row := q.queryRow(ctx, q.markUserEmailVerifiedStmt, markUserEmailVerified, id)
+	var i MarkUserEmailVerifiedRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.EmailVerified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

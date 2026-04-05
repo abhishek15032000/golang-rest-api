@@ -27,6 +27,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createBlogStmt, err = db.PrepareContext(ctx, createBlog); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateBlog: %w", err)
 	}
+	if q.createOTPStmt, err = db.PrepareContext(ctx, createOTP); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateOTP: %w", err)
+	}
 	if q.createUserStmt, err = db.PrepareContext(ctx, createUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUser: %w", err)
 	}
@@ -45,11 +48,20 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getUserProfileByUserIdStmt, err = db.PrepareContext(ctx, getUserProfileByUserId); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserProfileByUserId: %w", err)
 	}
+	if q.getValidOtpForUserStmt, err = db.PrepareContext(ctx, getValidOtpForUser); err != nil {
+		return nil, fmt.Errorf("error preparing query GetValidOtpForUser: %w", err)
+	}
 	if q.listBlogsStmt, err = db.PrepareContext(ctx, listBlogs); err != nil {
 		return nil, fmt.Errorf("error preparing query ListBlogs: %w", err)
 	}
 	if q.listUsersStmt, err = db.PrepareContext(ctx, listUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query ListUsers: %w", err)
+	}
+	if q.markOtpUsedStmt, err = db.PrepareContext(ctx, markOtpUsed); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkOtpUsed: %w", err)
+	}
+	if q.markUserEmailVerifiedStmt, err = db.PrepareContext(ctx, markUserEmailVerified); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkUserEmailVerified: %w", err)
 	}
 	return &q, nil
 }
@@ -59,6 +71,11 @@ func (q *Queries) Close() error {
 	if q.createBlogStmt != nil {
 		if cerr := q.createBlogStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createBlogStmt: %w", cerr)
+		}
+	}
+	if q.createOTPStmt != nil {
+		if cerr := q.createOTPStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createOTPStmt: %w", cerr)
 		}
 	}
 	if q.createUserStmt != nil {
@@ -91,6 +108,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getUserProfileByUserIdStmt: %w", cerr)
 		}
 	}
+	if q.getValidOtpForUserStmt != nil {
+		if cerr := q.getValidOtpForUserStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getValidOtpForUserStmt: %w", cerr)
+		}
+	}
 	if q.listBlogsStmt != nil {
 		if cerr := q.listBlogsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listBlogsStmt: %w", cerr)
@@ -99,6 +121,16 @@ func (q *Queries) Close() error {
 	if q.listUsersStmt != nil {
 		if cerr := q.listUsersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listUsersStmt: %w", cerr)
+		}
+	}
+	if q.markOtpUsedStmt != nil {
+		if cerr := q.markOtpUsedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markOtpUsedStmt: %w", cerr)
+		}
+	}
+	if q.markUserEmailVerifiedStmt != nil {
+		if cerr := q.markUserEmailVerifiedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markUserEmailVerifiedStmt: %w", cerr)
 		}
 	}
 	return err
@@ -141,14 +173,18 @@ type Queries struct {
 	db                         DBTX
 	tx                         *sql.Tx
 	createBlogStmt             *sql.Stmt
+	createOTPStmt              *sql.Stmt
 	createUserStmt             *sql.Stmt
 	createUserProfileStmt      *sql.Stmt
 	getUserStmt                *sql.Stmt
 	getUserByEmailStmt         *sql.Stmt
 	getUserByUsernameStmt      *sql.Stmt
 	getUserProfileByUserIdStmt *sql.Stmt
+	getValidOtpForUserStmt     *sql.Stmt
 	listBlogsStmt              *sql.Stmt
 	listUsersStmt              *sql.Stmt
+	markOtpUsedStmt            *sql.Stmt
+	markUserEmailVerifiedStmt  *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
@@ -156,13 +192,17 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		db:                         tx,
 		tx:                         tx,
 		createBlogStmt:             q.createBlogStmt,
+		createOTPStmt:              q.createOTPStmt,
 		createUserStmt:             q.createUserStmt,
 		createUserProfileStmt:      q.createUserProfileStmt,
 		getUserStmt:                q.getUserStmt,
 		getUserByEmailStmt:         q.getUserByEmailStmt,
 		getUserByUsernameStmt:      q.getUserByUsernameStmt,
 		getUserProfileByUserIdStmt: q.getUserProfileByUserIdStmt,
+		getValidOtpForUserStmt:     q.getValidOtpForUserStmt,
 		listBlogsStmt:              q.listBlogsStmt,
 		listUsersStmt:              q.listUsersStmt,
+		markOtpUsedStmt:            q.markOtpUsedStmt,
+		markUserEmailVerifiedStmt:  q.markUserEmailVerifiedStmt,
 	}
 }

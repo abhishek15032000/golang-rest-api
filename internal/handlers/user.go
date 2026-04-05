@@ -18,6 +18,7 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/golang-jwt/jwt/v5"
+	"gopkg.in/gomail.v2"
 )
 
 // upload User profile
@@ -142,6 +143,10 @@ func (h *Handler) CreateUser() http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusConflict, "Username already taken")
 			return
 		}
+		if err != sql.ErrNoRows {
+			utils.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Database error on username check: %v", err))
+			return
+		}
 
 		// Check if the email already exists
 		_, err = qtx.GetUserByEmail(ctx, req.Email)
@@ -149,10 +154,9 @@ func (h *Handler) CreateUser() http.HandlerFunc {
 			utils.RespondWithError(w, http.StatusConflict, "Email already taken")
 			return
 		}
-
 		// Check if it's a real DB error or just "Not Found"
 		if err != sql.ErrNoRows {
-			utils.RespondWithError(w, http.StatusInternalServerError, "Database error")
+			utils.RespondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Database error on email check: %v", err))
 			return
 		}
 
@@ -284,3 +288,172 @@ func (h *Handler) ListAllUsers() http.HandlerFunc {
 		utils.RespondWithSuccess(w, http.StatusOK, "Users listed successfully", users)
 	}
 }
+
+func (h *Handler) VerifyEmail() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "please login to continue")
+			return
+		}
+
+		uid, ok := claims["user_id"].(float64)
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+			return
+		}
+		userID := int32(uid)
+
+		user, err := h.Queries.GetUser(ctx, userID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusNotFound, "user not found")
+			return
+		}
+
+		if user.EmailVerified.Bool {
+			utils.RespondWithError(w, http.StatusBadRequest, "email already verified")
+			return
+		}
+
+		otp, err := utils.GenerateOTP()
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "failed to generate OTP")
+			return
+		}
+
+		otp_hash, err := utils.HashOTP(otp)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "failed to generate OTP")
+			return
+		}
+
+		// store OTP first
+		_, err = h.Queries.CreateOTP(ctx, store.CreateOTPParams{
+			OtpKey: otp_hash,
+			UserID: userID,
+		})
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "failed to create OTP")
+			return
+		}
+
+		from := os.Getenv("FROM_EMAIL")
+		appPassword := os.Getenv("SMTP_PASSWORD")
+		smtpHost := os.Getenv("SMTP_SERVER")
+
+		htmlString, err := utils.GetEmailTemplate(otp, user.Username, "The Go Project", 5)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "failed to generate email")
+			return
+		}
+
+		m := gomail.NewMessage()
+		m.SetHeader("From", from)
+		m.SetHeader("To", user.Email)
+		m.SetHeader("Subject", "Verify Your Email")
+		m.SetBody("text/html", htmlString)
+
+		// d := gomail.NewDialer(smtpHost, 587, from, appPassword)
+		// if err := d.DialAndSend(m); err != nil {
+		// 	utils.RespondWithError(w, http.StatusInternalServerError, "failed to send email")
+		// 	return
+		// }
+
+		go func(recipient, htmlBody string, from, appPassword, smtpHost string) {
+			m := gomail.NewMessage()
+			// Assume these are loaded into the Handler struct at startup
+			m.SetHeader("From", from)
+			m.SetHeader("To", recipient)
+			m.SetHeader("Subject", "Verify Your Email")
+			m.SetBody("text/html", htmlBody)
+			d := gomail.NewDialer(smtpHost, 587, from, appPassword)
+			if err := d.DialAndSend(m); err != nil {
+				// Log the error (don't fail the HTTP request since it already returned)
+				fmt.Printf("Failed to send background email to %s: %v\n", recipient, err)
+			}
+		}(user.Email, htmlString, from, appPassword, smtpHost)
+
+		utils.RespondWithSuccess(w, http.StatusOK, "Email sent successfully", nil)
+	}
+}
+
+func (h *Handler) VerifyOTP() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// i will do this using a transaction a safe update, where row will be locked, nothing will happen until the transaction is committed
+		ctx := r.Context()
+		var otp dtos.VerifyOTPRequest
+		if err := json.NewDecoder(r.Body).Decode(&otp); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		// validate the request first
+		if err := validation.Validate(&otp); err != nil {
+			utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "please login to continue")
+			return
+		}
+
+		uid, ok := claims["user_id"].(float64)
+		if !ok {
+			utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+			return
+		}
+		userID := int32(uid)
+		// what can happen now is that i will be query for the hash and user_id since they make a unique key,
+		// so i will get only one row, and i can check if it is expired or not, and if it is used or not, and if it is correct or not
+
+		// start the current transaction as there is a possiblity an update would happen
+		tx, err := h.DB.BeginTx(ctx, nil)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "failed to start transaction")
+			return
+		}
+		defer tx.Rollback()
+		qtx := store.New(tx)
+		otp_row, err := qtx.GetValidOtpForUser(ctx, userID)
+		// now first unmarshal the otp_row data, and now we need to check if the time is expired or not.
+		// we already have the data in otp_row, so we can directly use it.
+		// check if the otp is used or not.
+		if err != nil {
+			utils.RespondWithError(w, http.StatusUnauthorized, "invalid or expired OTP")
+			return
+		}
+
+		// Verify the OTP hash
+		if utils.ComparePassword(otp.Otpkey, otp_row.OtpKey) {
+			// mark the otp as used
+			_, err = qtx.MarkOtpUsed(ctx, otp_row.ID)
+			if err != nil {
+				utils.RespondWithError(w, http.StatusInternalServerError, "failed to mark otp as used")
+				return
+			}
+
+			// mark user email as verified
+			_, err = qtx.MarkUserEmailVerified(ctx, userID)
+			if err != nil {
+				utils.RespondWithError(w, http.StatusInternalServerError, "failed to mark user email as verified")
+				return
+			}
+
+			if err := tx.Commit(); err != nil {
+				utils.RespondWithError(w, http.StatusInternalServerError, "failed to commit transaction")
+				return
+			}
+
+			utils.RespondWithSuccess(w, http.StatusOK, "Email verified successfully", nil)
+		} else {
+			utils.RespondWithError(w, http.StatusUnauthorized, "invalid OTP code")
+			return
+		}
+	}
+}
+
+// next steps would be assigning an api-key to make this call, because i want to rate limit, no of times
+// user can call ask for verify otp, it should be like between two requests, there should be atleast 1 minute gap, and in an hour you can ask for otp
+// only 5 times.

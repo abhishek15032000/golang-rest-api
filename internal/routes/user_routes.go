@@ -14,6 +14,8 @@ func SetupUserRoutes(mux *http.ServeMux, h *handlers.Handler) {
 	userMux.HandleFunc("GET /profile", middleware.AuthMiddleware(h.GetProfile()))
 	userMux.HandleFunc("POST /session/logout", middleware.AuthMiddleware(h.Logout()))
 	userMux.HandleFunc("GET /all", middleware.AuthMiddleware(h.ListAllUsers()))
+	userMux.HandleFunc("POST /verifyemail", middleware.AuthMiddleware(h.VerifyEmail()))
+	userMux.HandleFunc("POST /verifyOtp", middleware.AuthMiddleware(h.VerifyOTP()))
 	mux.Handle("/users/", http.StripPrefix("/users", userMux))
 
 	// configure the upload mux

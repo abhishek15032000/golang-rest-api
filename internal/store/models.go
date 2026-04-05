@@ -17,13 +17,23 @@ type Blog struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
-type User struct {
+type OtpVerification struct {
 	ID        int32        `json:"id"`
-	Username  string       `json:"username"`
-	Email     string       `json:"email"`
-	Password  string       `json:"password"`
-	CreatedAt sql.NullTime `json:"created_at"`
-	UpdatedAt sql.NullTime `json:"updated_at"`
+	OtpKey    string       `json:"otp_key"`
+	UserID    int32        `json:"user_id"`
+	IssuedAt  sql.NullTime `json:"issued_at"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	IsUsed    sql.NullBool `json:"is_used"`
+}
+
+type User struct {
+	ID            int32        `json:"id"`
+	Username      string       `json:"username"`
+	Email         string       `json:"email"`
+	Password      string       `json:"password"`
+	EmailVerified sql.NullBool `json:"email_verified"`
+	CreatedAt     sql.NullTime `json:"created_at"`
+	UpdatedAt     sql.NullTime `json:"updated_at"`
 }
 
 type UserProfile struct {
