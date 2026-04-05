@@ -14,6 +14,24 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// @title Go Resume API
+// @version 1.0
+// @description This is a production-grade REST API server built with Go.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email defabhishekkumarsingh@gmail.com
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
 func main() {
 	config, err := serverconfig.LoadConfig()
 	if err != nil {

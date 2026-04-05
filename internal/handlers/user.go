@@ -21,8 +21,17 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-// upload User profile
-
+// UploadProfileImage godoc
+// @Summary Upload Profile Image
+// @Description Upload a profile picture to Cloudinary
+// @Tags users
+// @Accept multipart/form-data
+// @Produce json
+// @Param profile_image formData file true "Profile Image"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Router /upload/ [post]
 func (h *Handler) UploadProfileImage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := r.Context().Value(middleware.UserClaimsKey).(jwt.MapClaims)
@@ -69,8 +78,16 @@ func (h *Handler) UploadProfileImage() http.HandlerFunc {
 	}
 }
 
-// login a user.
-
+// LoginUser godoc
+// @Summary Login User
+// @Description Authenticate a user and receive a JWT and Refresh Token
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param request body dtos.LoginRequest true "Login Credentials"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Router /users/login [post]
 func (h *Handler) LoginUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -132,7 +149,15 @@ func (h *Handler) LoginUser() http.HandlerFunc {
 
 // once he logs out, i will blacklist the refresh token as well, so that his access gets immediately revoked, even if he has a valid access token.
 
-// createUser with transaction
+// RefreshAccessToken godoc
+// @Summary Refresh Access Token
+// @Description Generate a new JWT from a refresh token cookie
+// @Tags users
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Router /users/refreshaccesstoken [get]
 func (h *Handler) RefreshAccessToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -202,6 +227,16 @@ func (h *Handler) RefreshAccessToken() http.HandlerFunc {
 	}
 }
 
+// CreateUser godoc
+// @Summary Register a new User
+// @Description Create a new user with username, email, and password
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param request body dtos.CreateUserRequest true "Registration Info"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Router /users/register [post]
 func (h *Handler) CreateUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -280,6 +315,15 @@ func (h *Handler) CreateUser() http.HandlerFunc {
 	}
 }
 
+// GetProfile godoc
+// @Summary Get User Profile
+// @Description Retrieve the profile of the currently authenticated user
+// @Tags users
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Router /users/profile [get]
 func (h *Handler) GetProfile() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -315,6 +359,14 @@ func (h *Handler) GetProfile() http.HandlerFunc {
 	}
 }
 
+// Logout godoc
+// @Summary Logout User
+// @Description Blacklist current JWT and revoke refresh token
+// @Tags users
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /users/session/logout [post]
 func (h *Handler) Logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 1. extract jwt claims from the request context
@@ -375,6 +427,16 @@ func extractTokenFromHander(r *http.Request) string {
 	return parts[1]
 }
 
+// ListAllUsers godoc
+// @Summary List All Users
+// @Description Get a paginated list of all users
+// @Tags users
+// @Produce json
+// @Param limit query int false "Limit"
+// @Param offset query int false "Offset"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /users/all [get]
 func (h *Handler) ListAllUsers() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -392,6 +454,14 @@ func (h *Handler) ListAllUsers() http.HandlerFunc {
 	}
 }
 
+// VerifyEmail godoc
+// @Summary Request Email OTP
+// @Description Send an OTP to the user's registered email
+// @Tags users
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /users/verifyemail [post]
 func (h *Handler) VerifyEmail() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -482,6 +552,16 @@ func (h *Handler) VerifyEmail() http.HandlerFunc {
 	}
 }
 
+// VerifyOTP godoc
+// @Summary Verify OTP
+// @Description Verify the OTP submitted by the user
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param request body dtos.VerifyOTPRequest true "OTP Key"
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /users/verifyOtp [post]
 func (h *Handler) VerifyOTP() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// i will do this using a transaction a safe update, where row will be locked, nothing will happen until the transaction is committed

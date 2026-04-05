@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: go_resume_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: rest_api_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rest_api_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: go_resume_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  dbmate:
+    image: amacneil/dbmate:latest
+    container_name: go_resume_dbmate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./db/migrations:/db/migrations
+    environment:
+      DATABASE_URL: "postgres://postgres:password123@postgres:5432/rest_api_db?sslmode=disable"
+    command: ["-d", "./db/migrations", "up"]
+
+  api:
+    build:
+      context: .
+      target: dev
+    container_name: go_resume_api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      dbmate:
+        condition: service_completed_successfully
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: "8080"
+      DATABASE_URL: "postgres://postgres:password123@postgres:5432/rest_api_db?sslmode=disable"
+      ENVIRONMENT: "production"
+      LOG_LEVEL: "info"
+      JWT_SECRET: "docker_secret_key_1234567890"
+      REDIS_ADDR: "redis:6379"
+      # Be sure to set cloudinary and SMTP secrets in an .env file or manually
+    env_file:
+      - .env.example
+
+volumes:
+  postgres_data:
