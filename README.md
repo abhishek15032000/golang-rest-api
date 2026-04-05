@@ -35,7 +35,30 @@ A robust, production-ready RESTful API built with Go (Golang). It features a cle
 
 ## 🏗️ Architecture
 
-The project follows a standard modular architecture, separating concerns into distinct layers:
+The project follows a standard modular architecture, ensuring a separation of concerns through several well-known design patterns:
+
+### 1. Simplified Layered Architecture (Handler-Store Pattern)
+The project is divided into distinct logical layers:
+*   **Routing Layer (`internal/routes`)**: Maps HTTP paths to specific handler functions.
+*   **Controller / Business Logic Layer (`internal/handlers`)**: Contains the core application logic, handles requests, and orchestrates database/Redis calls.
+*   **Data Access Layer (`internal/store`)**: Database interface using `sqlc` for auto-generated, type-safe SQL queries.
+
+### 2. Dependency Injection
+Dependencies such as database connections, Redis clients, and query stores are instantiated in `main.go` and explicitly injected into handlers:
+```go
+queries := store.New(db)
+handler := handlers.NewHandlers(db, queries, redisinstance)
+```
+This pattern deeply decouples components and significantly enhances unit testability.
+
+### 3. Repository Pattern
+Through `sqlc`, `internal/store` acts as the Repository Layer. Handlers call interface-like methods on the `store` object to interact with the database, fully abstracting SQL queries from the HTTP routing logic.
+
+### 4. Data Transfer Object (DTO) Pattern
+The `internal/dtos` package implements the DTO pattern. This standardizes and validates incoming and outgoing JSON payloads, keeping API contracts separate from raw database schemas.
+
+### 5. Middleware Pattern
+The `internal/middleware` package intercepts HTTP requests to handle cross-cutting concerns globally, such as authentication (JWT validation), logging, and CORS handling.
 
 ### System Architecture Diagram
 
