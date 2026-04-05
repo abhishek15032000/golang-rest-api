@@ -189,6 +189,27 @@ sequenceDiagram
     air
     ```
 
+## 🧪 Testing with Postman
+
+A comprehensive Postman collection (`GOLANG-PRODUCTION-GRADE-REST-API.postman_collection.json`) is included in the root of the repository to help you completely automate your local API testing.
+
+### How to use it effectively:
+
+1. **Import the Collection:** Open Postman, click on **Import**, and select the JSON file.
+2. **Automatic Environment Variables:** The collection relies on embedded Postman Collection Variables. Ensure your collection variables look like this:
+   - `baseUrl`: `http://localhost:8080`
+   - `accessToken`: *(Leave blank)* 
+   - `refreshToken`: *(Leave blank)*
+3. **Automated Token Management (Magic Auth):** 
+   - Simply execute the **Register** and then the **Login** request. 
+   - Postman's built-in Test Scripts will automatically intercept the `access_token` and `refresh_token` from the login JSON response and seamlessly inject them into your collection variables!
+   - All protected routes in the collection (like *Upload Profile Image*, *Get Profile*, *Verify OTP*, etc.) are pre-configured to inherit the authentication bearer token `{{accessToken}}`. Once you log in, everything else just works.
+4. **Built-in Quality Assertions:** Every single route in this collection comes with pre-written Javascript Test Assertions. Just run the entire collection using Postman's "Collection Runner" to immediately verify:
+   - HTTP Status Code correctness (200, 201).
+   - Expected JSON schema structures.
+   - Proper extraction of data and array lengths.
+   - Latency rules (e.g., ensuring Server health-checks resolve in under 500ms).
+
 ## 📖 API Reference
 
 ### User Authentication
