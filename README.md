@@ -22,6 +22,15 @@ A robust, production-ready RESTful API built with Go (Golang). It features a cle
     *   Modular and scalable directory structure.
     *   Standardized JSON responses and structured error handling.
 
+## What this project demonstrates
+
+- Secure authentication with refresh token rotation
+- OTP-based email verification
+- Redis caching and token blacklisting
+- SQLC for type-safe queries
+- Transaction handling and concurrency safety
+
+
 ## 🏗️ Architecture
 
 The project follows a standard modular architecture, separating concerns into distinct layers:
