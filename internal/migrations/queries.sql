@@ -41,11 +41,12 @@ RETURNING ID, OTP_KEY, ISSUED_AT, EXPIRES_AT, USER_ID;
 SELECT * FROM otp_verification WHERE user_id = $1 AND is_used = false AND expires_at > now() ORDER BY issued_at DESC LIMIT 1 FOR UPDATE;
 -- name: MarkOtpUsed :one
 UPDATE otp_verification
-SET is_used = true
+SET is_used = true,
+    updated_at = now()
 WHERE id = $1
 AND is_used = false
 AND expires_at > now()
-RETURNING id, otp_key, issued_at, expires_at, user_id;
+RETURNING id, otp_key, issued_at, expires_at, user_id, created_at, updated_at;
 -- name: MarkUserEmailVerified :one
 UPDATE users
 SET email_verified = true,
@@ -53,3 +54,22 @@ SET email_verified = true,
 WHERE id = $1
 AND email_verified = false
 RETURNING id, username, email, email_verified, created_at, updated_at;
+-- name: InsertRefreshToken :one
+INSERT INTO refresh_tokens (user_id, token_hash)
+VALUES ($1, $2)
+RETURNING ID, USER_ID, TOKEN_HASH, EXPIRY, IS_REVOKED, CREATED_AT, UPDATED_AT;
+-- name: GetRefreshToken :one
+SELECT id, user_id, token_hash, expiry, is_revoked, CREATED_AT, UPDATED_AT
+FROM refresh_tokens
+WHERE token_hash = $1
+AND is_revoked = false
+AND expiry > now()
+FOR UPDATE;
+-- name: MarkRefreshTokenRevoked :one
+UPDATE refresh_tokens
+SET is_revoked = true,
+    updated_at = now()
+WHERE token_hash = $1
+AND is_revoked = false
+AND expiry > now()
+RETURNING id, user_id, token_hash, expiry, is_revoked, CREATED_AT, UPDATED_AT;

@@ -6,6 +6,7 @@ import (
 	"rest-api/internal/utils"
 	"rest-api/redisconfig"
 	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -42,6 +43,13 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			utils.RespondWithError(w, http.StatusUnauthorized, "Invalid token")
 			return // <-- was missing! Without this, nil claims get passed to the handler
+		}
+		// check if the token has expired or not.
+		if claims["exp"].(float64) < float64(time.Now().Unix()) {
+			// set int redis as blacklisted token
+			redisconfig.RedisClient.Set(r.Context(), token, "blacklisted", time.Duration(claims["exp"].(float64))*time.Second)
+			utils.RespondWithError(w, http.StatusUnauthorized, "Token expired")
+			return
 		}
 		ctx := context.WithValue(r.Context(), UserClaimsKey, claims)
 		r = r.WithContext(ctx)

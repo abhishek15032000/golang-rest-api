@@ -24,6 +24,18 @@ type OtpVerification struct {
 	IssuedAt  sql.NullTime `json:"issued_at"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	IsUsed    sql.NullBool `json:"is_used"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
+type RefreshToken struct {
+	ID        int32        `json:"id"`
+	UserID    int32        `json:"user_id"`
+	TokenHash string       `json:"token_hash"`
+	Expiry    sql.NullTime `json:"expiry"`
+	IsRevoked sql.NullBool `json:"is_revoked"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
 type User struct {

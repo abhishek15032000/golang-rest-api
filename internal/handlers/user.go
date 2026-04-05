@@ -102,13 +102,105 @@ func (h *Handler) LoginUser() http.HandlerFunc {
 			return
 		}
 
-		utils.RespondWithSuccess(w, http.StatusOK, "User logged in successfully", map[string]string{
+		// i will be creating a refresh token here.
+		refreshToken, err := utils.Generaterefreshtoken(user.ID, h.Queries, &ctx)
+		if err != nil {
+			// fmt.Println(err)
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to generate refresh token")
+			return
+		}
+
+		cookie := &http.Cookie{
+			Name:     "refresh_token",
+			Value:    refreshToken,
+			HttpOnly: true,
+			Secure:   false,                   // but here i am using http only. i should use secure true only when using https.
+			SameSite: http.SameSiteStrictMode, // it is restricting this cookie to only be send to my server and no other server.
+			Path:     "/",
+			MaxAge:   60 * 60 * 24 * 14, // so 2 weeks
+		}
+
+		utils.RespondSuccessfullLogin(w, http.StatusOK, "User logged in successfully", map[string]string{
 			"token": token,
-		})
+		}, cookie)
 	}
 }
 
+// to create a refresh token you need to login. but to refresh the access token, you need to hit this api which i am about to create with refresh token,
+// so that i could provide you one access token.i will be setting this refresh token as a cookie, so that it get also send by the browser in all
+// requests to the server.
+
+// once he logs out, i will blacklist the refresh token as well, so that his access gets immediately revoked, even if he has a valid access token.
+
 // createUser with transaction
+func (h *Handler) RefreshAccessToken() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			utils.RespondWithError(w, http.StatusUnauthorized, "No refresh token found")
+			return
+		}
+		// now i will generate you one refresh token and send you back the token.
+		// the query is written in such a way that if the token hash exist and has not expired then only i will get a record else no record.
+		token, err := h.Queries.GetRefreshToken(ctx, cookie.Value)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusUnauthorized, "Invalid refresh token, login to continue")
+			return
+		}
+		// if it valid then we will generate a new access token and send it to the user.
+		// i need to get names as well from that user id.
+		user_details, err := h.Queries.GetUser(ctx, token.UserID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to get user details")
+			return
+		}
+		access_token, err := utils.GenerateJWT(int(token.UserID), user_details.Username)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to generate token")
+			return
+		}
+		// revoke the current refresh token.
+		_, err = h.Queries.MarkRefreshTokenRevoked(ctx, cookie.Value)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to revoke refresh token")
+			return
+		}
+
+		// i will be creating a refresh token here.
+		refreshToken, err := utils.Generaterefreshtoken(token.UserID, h.Queries, &ctx)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to generate refresh token")
+			return
+		}
+
+		new_cookie := &http.Cookie{
+			Name:     "refresh_token",
+			Value:    refreshToken,
+			HttpOnly: true,
+			Secure:   false,                   // but here i am using http only. i should use secure true only when using https.
+			SameSite: http.SameSiteStrictMode, // it is restricting this cookie to only be send to my server and no other server.
+			Path:     "/",
+			MaxAge:   60 * 60 * 24 * 14, // so 2 weeks
+		}
+
+		// blacklist previous access token
+		tokenString := extractTokenFromHander(r)
+		if tokenString == "" {
+			utils.RespondWithError(w, http.StatusUnauthorized, "token not found")
+			return
+		}
+
+		if err := h.Redis.Set(ctx, tokenString, "blacklisted", 10*time.Minute).Err(); err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to blacklist token")
+			return
+		}
+
+		utils.RespondSuccessfullLogin(w, http.StatusOK, "Access token generated successfully", map[string]string{
+			"token": access_token,
+		}, new_cookie)
+	}
+}
 
 func (h *Handler) CreateUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +341,17 @@ func (h *Handler) Logout() http.HandlerFunc {
 		// it is setting tokenstring:blacklisted like this in redis
 		if err := h.Redis.Set(ctx, tokenString, "blacklisted", ttl).Err(); err != nil {
 			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to blacklist token")
+			return
+		}
+		// revoke the refresh token when logged out.
+		cookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			utils.RespondWithError(w, http.StatusUnauthorized, "please login to continue")
+			return
+		}
+		_, err = h.Queries.MarkRefreshTokenRevoked(ctx, cookie.Value)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Failed to revoke refresh token")
 			return
 		}
 		// clean user cache in redis:-

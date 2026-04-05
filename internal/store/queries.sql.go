@@ -127,6 +127,30 @@ func (q *Queries) CreateUserProfile(ctx context.Context, arg CreateUserProfilePa
 	return i, err
 }
 
+const getRefreshToken = `-- name: GetRefreshToken :one
+SELECT id, user_id, token_hash, expiry, is_revoked, CREATED_AT, UPDATED_AT
+FROM refresh_tokens
+WHERE token_hash = $1
+AND is_revoked = false
+AND expiry > now()
+FOR UPDATE
+`
+
+func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error) {
+	row := q.queryRow(ctx, q.getRefreshTokenStmt, getRefreshToken, tokenHash)
+	var i RefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Expiry,
+		&i.IsRevoked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT ID, USERNAME, EMAIL, EMAIL_VERIFIED, CREATED_AT, UPDATED_AT FROM USERS WHERE ID = $1
 `
@@ -211,7 +235,7 @@ func (q *Queries) GetUserProfileByUserId(ctx context.Context, userID int32) (Use
 }
 
 const getValidOtpForUser = `-- name: GetValidOtpForUser :one
-SELECT id, otp_key, user_id, issued_at, expires_at, is_used FROM otp_verification WHERE user_id = $1 AND is_used = false AND expires_at > now() ORDER BY issued_at DESC LIMIT 1 FOR UPDATE
+SELECT id, otp_key, user_id, issued_at, expires_at, is_used, created_at, updated_at FROM otp_verification WHERE user_id = $1 AND is_used = false AND expires_at > now() ORDER BY issued_at DESC LIMIT 1 FOR UPDATE
 `
 
 func (q *Queries) GetValidOtpForUser(ctx context.Context, userID int32) (OtpVerification, error) {
@@ -224,6 +248,34 @@ func (q *Queries) GetValidOtpForUser(ctx context.Context, userID int32) (OtpVeri
 		&i.IssuedAt,
 		&i.ExpiresAt,
 		&i.IsUsed,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertRefreshToken = `-- name: InsertRefreshToken :one
+INSERT INTO refresh_tokens (user_id, token_hash)
+VALUES ($1, $2)
+RETURNING ID, USER_ID, TOKEN_HASH, EXPIRY, IS_REVOKED, CREATED_AT, UPDATED_AT
+`
+
+type InsertRefreshTokenParams struct {
+	UserID    int32  `json:"user_id"`
+	TokenHash string `json:"token_hash"`
+}
+
+func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshTokenParams) (RefreshToken, error) {
+	row := q.queryRow(ctx, q.insertRefreshTokenStmt, insertRefreshToken, arg.UserID, arg.TokenHash)
+	var i RefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Expiry,
+		&i.IsRevoked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -312,11 +364,12 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 
 const markOtpUsed = `-- name: MarkOtpUsed :one
 UPDATE otp_verification
-SET is_used = true
+SET is_used = true,
+    updated_at = now()
 WHERE id = $1
 AND is_used = false
 AND expires_at > now()
-RETURNING id, otp_key, issued_at, expires_at, user_id
+RETURNING id, otp_key, issued_at, expires_at, user_id, created_at, updated_at
 `
 
 type MarkOtpUsedRow struct {
@@ -325,6 +378,8 @@ type MarkOtpUsedRow struct {
 	IssuedAt  sql.NullTime `json:"issued_at"`
 	ExpiresAt sql.NullTime `json:"expires_at"`
 	UserID    int32        `json:"user_id"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
 func (q *Queries) MarkOtpUsed(ctx context.Context, id int32) (MarkOtpUsedRow, error) {
@@ -336,6 +391,33 @@ func (q *Queries) MarkOtpUsed(ctx context.Context, id int32) (MarkOtpUsedRow, er
 		&i.IssuedAt,
 		&i.ExpiresAt,
 		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const markRefreshTokenRevoked = `-- name: MarkRefreshTokenRevoked :one
+UPDATE refresh_tokens
+SET is_revoked = true,
+    updated_at = now()
+WHERE token_hash = $1
+AND is_revoked = false
+AND expiry > now()
+RETURNING id, user_id, token_hash, expiry, is_revoked, CREATED_AT, UPDATED_AT
+`
+
+func (q *Queries) MarkRefreshTokenRevoked(ctx context.Context, tokenHash string) (RefreshToken, error) {
+	row := q.queryRow(ctx, q.markRefreshTokenRevokedStmt, markRefreshTokenRevoked, tokenHash)
+	var i RefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Expiry,
+		&i.IsRevoked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

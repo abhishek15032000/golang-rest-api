@@ -36,6 +36,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createUserProfileStmt, err = db.PrepareContext(ctx, createUserProfile); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUserProfile: %w", err)
 	}
+	if q.getRefreshTokenStmt, err = db.PrepareContext(ctx, getRefreshToken); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRefreshToken: %w", err)
+	}
 	if q.getUserStmt, err = db.PrepareContext(ctx, getUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUser: %w", err)
 	}
@@ -51,6 +54,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getValidOtpForUserStmt, err = db.PrepareContext(ctx, getValidOtpForUser); err != nil {
 		return nil, fmt.Errorf("error preparing query GetValidOtpForUser: %w", err)
 	}
+	if q.insertRefreshTokenStmt, err = db.PrepareContext(ctx, insertRefreshToken); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertRefreshToken: %w", err)
+	}
 	if q.listBlogsStmt, err = db.PrepareContext(ctx, listBlogs); err != nil {
 		return nil, fmt.Errorf("error preparing query ListBlogs: %w", err)
 	}
@@ -59,6 +65,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.markOtpUsedStmt, err = db.PrepareContext(ctx, markOtpUsed); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkOtpUsed: %w", err)
+	}
+	if q.markRefreshTokenRevokedStmt, err = db.PrepareContext(ctx, markRefreshTokenRevoked); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkRefreshTokenRevoked: %w", err)
 	}
 	if q.markUserEmailVerifiedStmt, err = db.PrepareContext(ctx, markUserEmailVerified); err != nil {
 		return nil, fmt.Errorf("error preparing query MarkUserEmailVerified: %w", err)
@@ -88,6 +97,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing createUserProfileStmt: %w", cerr)
 		}
 	}
+	if q.getRefreshTokenStmt != nil {
+		if cerr := q.getRefreshTokenStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRefreshTokenStmt: %w", cerr)
+		}
+	}
 	if q.getUserStmt != nil {
 		if cerr := q.getUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserStmt: %w", cerr)
@@ -113,6 +127,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getValidOtpForUserStmt: %w", cerr)
 		}
 	}
+	if q.insertRefreshTokenStmt != nil {
+		if cerr := q.insertRefreshTokenStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertRefreshTokenStmt: %w", cerr)
+		}
+	}
 	if q.listBlogsStmt != nil {
 		if cerr := q.listBlogsStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listBlogsStmt: %w", cerr)
@@ -126,6 +145,11 @@ func (q *Queries) Close() error {
 	if q.markOtpUsedStmt != nil {
 		if cerr := q.markOtpUsedStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing markOtpUsedStmt: %w", cerr)
+		}
+	}
+	if q.markRefreshTokenRevokedStmt != nil {
+		if cerr := q.markRefreshTokenRevokedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markRefreshTokenRevokedStmt: %w", cerr)
 		}
 	}
 	if q.markUserEmailVerifiedStmt != nil {
@@ -170,39 +194,45 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                         DBTX
-	tx                         *sql.Tx
-	createBlogStmt             *sql.Stmt
-	createOTPStmt              *sql.Stmt
-	createUserStmt             *sql.Stmt
-	createUserProfileStmt      *sql.Stmt
-	getUserStmt                *sql.Stmt
-	getUserByEmailStmt         *sql.Stmt
-	getUserByUsernameStmt      *sql.Stmt
-	getUserProfileByUserIdStmt *sql.Stmt
-	getValidOtpForUserStmt     *sql.Stmt
-	listBlogsStmt              *sql.Stmt
-	listUsersStmt              *sql.Stmt
-	markOtpUsedStmt            *sql.Stmt
-	markUserEmailVerifiedStmt  *sql.Stmt
+	db                          DBTX
+	tx                          *sql.Tx
+	createBlogStmt              *sql.Stmt
+	createOTPStmt               *sql.Stmt
+	createUserStmt              *sql.Stmt
+	createUserProfileStmt       *sql.Stmt
+	getRefreshTokenStmt         *sql.Stmt
+	getUserStmt                 *sql.Stmt
+	getUserByEmailStmt          *sql.Stmt
+	getUserByUsernameStmt       *sql.Stmt
+	getUserProfileByUserIdStmt  *sql.Stmt
+	getValidOtpForUserStmt      *sql.Stmt
+	insertRefreshTokenStmt      *sql.Stmt
+	listBlogsStmt               *sql.Stmt
+	listUsersStmt               *sql.Stmt
+	markOtpUsedStmt             *sql.Stmt
+	markRefreshTokenRevokedStmt *sql.Stmt
+	markUserEmailVerifiedStmt   *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                         tx,
-		tx:                         tx,
-		createBlogStmt:             q.createBlogStmt,
-		createOTPStmt:              q.createOTPStmt,
-		createUserStmt:             q.createUserStmt,
-		createUserProfileStmt:      q.createUserProfileStmt,
-		getUserStmt:                q.getUserStmt,
-		getUserByEmailStmt:         q.getUserByEmailStmt,
-		getUserByUsernameStmt:      q.getUserByUsernameStmt,
-		getUserProfileByUserIdStmt: q.getUserProfileByUserIdStmt,
-		getValidOtpForUserStmt:     q.getValidOtpForUserStmt,
-		listBlogsStmt:              q.listBlogsStmt,
-		listUsersStmt:              q.listUsersStmt,
-		markOtpUsedStmt:            q.markOtpUsedStmt,
-		markUserEmailVerifiedStmt:  q.markUserEmailVerifiedStmt,
+		db:                          tx,
+		tx:                          tx,
+		createBlogStmt:              q.createBlogStmt,
+		createOTPStmt:               q.createOTPStmt,
+		createUserStmt:              q.createUserStmt,
+		createUserProfileStmt:       q.createUserProfileStmt,
+		getRefreshTokenStmt:         q.getRefreshTokenStmt,
+		getUserStmt:                 q.getUserStmt,
+		getUserByEmailStmt:          q.getUserByEmailStmt,
+		getUserByUsernameStmt:       q.getUserByUsernameStmt,
+		getUserProfileByUserIdStmt:  q.getUserProfileByUserIdStmt,
+		getValidOtpForUserStmt:      q.getValidOtpForUserStmt,
+		insertRefreshTokenStmt:      q.insertRefreshTokenStmt,
+		listBlogsStmt:               q.listBlogsStmt,
+		listUsersStmt:               q.listUsersStmt,
+		markOtpUsedStmt:             q.markOtpUsedStmt,
+		markRefreshTokenRevokedStmt: q.markRefreshTokenRevokedStmt,
+		markUserEmailVerifiedStmt:   q.markUserEmailVerifiedStmt,
 	}
 }
