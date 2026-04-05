@@ -189,6 +189,157 @@ sequenceDiagram
     air
     ```
 
+## 📖 API Reference
+
+### User Authentication
+
+#### 1. Register User
+- **Endpoint**: `POST /users/register`
+- **Auth Required**: No
+- **Request Body** (JSON):
+  ```json
+  {
+    "username": "johndoe",
+    "email": "johndoe@example.com",
+    "password": "securepassword123"
+  }
+  ```
+- **Response** (201 Created):
+  ```json
+  {
+    "message": "User created successfully",
+    "data": null
+  }
+  ```
+
+#### 2. Login User
+- **Endpoint**: `POST /users/login`
+- **Auth Required**: No
+- **Description**: Returns JWT in body and Refresh Token in `HttpOnly` cookie.
+- **Request Body** (JSON):
+  ```json
+  {
+    "username": "johndoe",
+    "password": "securepassword123"
+  }
+  ```
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "User logged in successfully",
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR..."
+    }
+  }
+  ```
+
+#### 3. Refresh Access Token
+- **Endpoint**: `GET /users/refreshaccesstoken`
+- **Auth Required**: No (Requires valid `refresh_token` cookie)
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "Access token generated successfully",
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR..."
+    }
+  }
+  ```
+
+#### 4. Logout Session
+- **Endpoint**: `POST /users/session/logout`
+- **Auth Required**: Yes (Bearer Token)
+- **Description**: Blacklists current JWT and revokes refresh token.
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "User logged out successfully",
+    "data": null
+  }
+  ```
+
+### Email & OTP Verification
+
+#### 5. Send Email OTP
+- **Endpoint**: `POST /users/verifyemail`
+- **Auth Required**: Yes (Bearer Token)
+- **Description**: Generates an OTP and sends it to the registered email address.
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "Email sent successfully",
+    "data": null
+  }
+  ```
+
+#### 6. Verify OTP
+- **Endpoint**: `POST /users/verifyOtp`
+- **Auth Required**: Yes (Bearer Token)
+- **Request Body** (JSON):
+  ```json
+  {
+    "otpkey": "123456"
+  }
+  ```
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "Email verified successfully",
+    "data": null
+  }
+  ```
+
+### Profiles & Users
+
+#### 7. Get Current User Profile
+- **Endpoint**: `GET /users/profile`
+- **Auth Required**: Yes (Bearer Token)
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "User profile fetched successfully",
+    "data": {
+        "id": 1,
+        "username": "johndoe",
+        "email": "johndoe@example.com",
+        "email_verified": true,
+        "created_at": "2026-04-05T12:00:00Z"
+    }
+  }
+  ```
+
+#### 8. Upload Profile Image
+- **Endpoint**: `POST /upload/`
+- **Auth Required**: Yes (Bearer Token)
+- **Content-Type**: `multipart/form-data`
+- **Request Body**:
+  * `profile_image`: [File Binary]
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "Profile image uploaded successfully",
+    "data": "https://res.cloudinary.com/..."
+  }
+  ```
+
+#### 9. List All Users
+- **Endpoint**: `GET /users/all?limit=10&offset=0`
+- **Auth Required**: Yes (Bearer Token)
+- **Response** (200 OK):
+  ```json
+  {
+    "message": "Users listed successfully",
+    "data": [
+      {
+        "id": 1,
+        "username": "johndoe",
+        "email": "johndoe@example.com",
+        "email_verified": true
+      }
+    ]
+  }
+  ```
+
 ## 🛠️ Tech Stack
 
 *   **Language:** Go (Golang)
